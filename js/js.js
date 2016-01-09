@@ -31,31 +31,89 @@ function get2dArray(x, y, value){
 
 var RetroBrickGameI = (function() {
 
-    var maxScoreName = 'RetroBrickGameI';
+    var maxScoreName = 'RetroBrickGameI_MaxScore';
+    var gamesPlayedName = 'RetroBrickGameI_GamesPlayed'
 
     var domElement = null;
     var infoDomElement = null;
     var levelDomElement = null;
     var scoreDomElement = null;
     var maxScoreDomElement = null;
+    var gamesPlayedElement = null;
     var ctx = null;
     var screenWidth = null;
     var screenHeight = null;
     var squareWidth = null;
     var screenHeightSegments = 20;
     var screenWidthSegments = 10;
-    var interval = 200;
-    var intervalLimit = 80;
-    var intervalId = null;
+    var interval = 600;
+    var intervalLimit = 300;
+    var shootingInterval = 260;
+    var shootingIntervalLimit = 60;
+    var enemyMovingFuncIntervalId = null;
     var score = 0;
     var level = 0;
 
+    var playerMovingFuncIntervalId = null;
+    var shootingIntervalId = null;
+
     var direction = {left : 0, right : 1};
 
-    var arr = null;
+    var enemy = {
+      arr: null,
+      generateRandomLine : function () {
+        var newLine = new Array(screenWidthSegments);
+
+        for (let i = 0; i < screenWidthSegments; i++) {
+          newLine[i] = Math.floor(Math.random() * 100) % 2 ? 0 : 1;
+        }
+
+        return newLine;
+      },
+      reset : function () {
+        this.arr = get2dArray(screenHeightSegments, screenWidthSegments);
+
+        for (let y = 0; y < screenHeightSegments - 16; y++) {
+          this.arr[y] = this.generateRandomLine();
+        }
+
+      },
+      draw : function () {
+        for (let y = 0; y < screenHeightSegments; y++) {
+          for (let x = 0; x < screenWidthSegments; x++) {
+            if(this.arr[y][x] === 1)
+              drawSquare(x, y);
+          }
+        }
+
+        // this.arr.forEach(function(i){
+        //   i.forEach(function(value) {
+        //     if(value === 1)
+        //       drawSquare(x, y);
+        //   });
+        // });
+      },
+      step : function () {
+
+        var gameOver = this.arr[screenHeightSegments - 4].filter(function(i){
+          return i === 1;
+        }).length;
+
+        if(gameOver){
+          alert("წააგე! ქულა : " + score);
+          restart();
+        }
+
+        for (let y = screenHeightSegments-3; y > 0; y--) {
+          this.arr[y] = this.arr[y - 1];
+        }
+
+        this.arr[0] = this.generateRandomLine();
+      }
+    };
 
     var player = {
-      squares : [],
+      squares : null,
       draw : function () {
         for (let crd of this.squares) {
           drawSquare(crd.x, crd.y);
@@ -69,10 +127,10 @@ var RetroBrickGameI = (function() {
       canMove: function(direction){
         return  this.squares.filter(function(i){
                   var x = [i.x - 1, i.x + 1][direction];
-                  return x > 9 || x < 0;
+                  return x > 10 || x < -1;
                 }).length == 0;
       },
-      resetLocation : function(){
+      reset : function(){
         this.squares = [{x:4, y:screenHeightSegments - 1},
                         {x:5, y:screenHeightSegments - 1},
                         {x:6, y:screenHeightSegments - 1},
@@ -80,23 +138,18 @@ var RetroBrickGameI = (function() {
                        ];
       },
       shoot : function(){
-        var x = this.squares[1];
+        var x = this.squares[1].x;
 
-        for (let y = 0; y < screenHeightSegments - 3; y++) {
-          arr[y][loc.x]
+        for (let y = screenHeightSegments - 3; y > 0 ; y--) {
+          if(enemy.arr[y][x] == 1){
+            setScore(score + 1);
+            enemy.arr[y][x] = 0;
+            break;
+          }
         }
       }
     };
 
-    function generateRandomLine(argument) {
-      var arr = new Array(screenWidthSegments);
-
-      for (let i = 0; i < screenWidthSegments; i++) {
-        arr[i] = Math.floor(Math.random() * 100) % 3 ? 0 : 1;
-      }
-
-      return arr;
-    }
 
     function drawSquare(x, y) {
 
@@ -141,12 +194,31 @@ var RetroBrickGameI = (function() {
         squareWidth = Math.floor(screenWidth / screenWidthSegments);
         screenWidth = screenWidthSegments * squareWidth; // pixel perfect :v
 
-        console.log(squareWidth);
+        console.log("square width : "+squareWidth);
 
         domElement.setAttribute('height', screenHeight);
         domElement.setAttribute('width', screenWidth);
 
         render();
+    }
+
+    function keyUp(e) {
+      switch (e.which) {
+
+          case 37://left
+          case 39://right
+              {
+                  clearInterval(playerMovingFuncIntervalId);
+                  playerMovingFuncIntervalId = null;
+                  break;
+              }
+          case 32 :
+              {
+                  clearInterval(shootingIntervalId);
+                  shootingIntervalId = null;
+                  break;
+              }
+      }
     }
 
     function keyDown(e) {
@@ -155,13 +227,33 @@ var RetroBrickGameI = (function() {
             /* left */
             case 37:
                 {
-                  player.move(direction.left);
+                    if(playerMovingFuncIntervalId === null){
+                      player.move(direction.left);
+                      playerMovingFuncIntervalId = setInterval(function () {
+                        player.move(direction.left);
+                      }, 50);
+                    }
                     break;
                 }
                 /*right*/
             case 39:
                 {
-                  player.move(direction.right);
+                    if(playerMovingFuncIntervalId === null){
+                      player.move(direction.right);
+                      playerMovingFuncIntervalId = setInterval(function () {
+                        player.move(direction.right);
+                      }, 50);
+                    }
+                    break;
+                }
+            case 32 :
+                {
+                    if(shootingIntervalId === null){
+                      player.shoot();
+                      shootingIntervalId = setInterval(function() {
+                        player.shoot();
+                      }, shootingInterval);
+                    }
                     break;
                 }
         }
@@ -169,8 +261,8 @@ var RetroBrickGameI = (function() {
 
     function setScore(newScore) {
         score = newScore;
-        if (score % 10 === 0 && score !== 0) {
-            setLevel(Math.floor(score / 10));
+        if (score % 120 === 0 && score !== 0) {
+            setLevel(Math.floor(score / 120));
         }
         scoreDomElement.innerText = "score : " + score + ". ";
         updateMaxScore();
@@ -191,74 +283,87 @@ var RetroBrickGameI = (function() {
         localStorage.setItem(maxScoreName, maxScore);
     }
 
+    function updateGamesPlayed() {
+      var old = localStorage.getItem(gamesPlayedName);
+
+      if (old == null || old === undefined || isNaN(parseInt(old, 10))) {
+          localStorage.setItem(gamesPlayedName, 0);
+          old = 0;
+      } else {
+          old = parseInt(old, 10);
+      }
+
+      var gamesPlayed = old + 1;
+      gamesPlayedElement.innerText = 'games played : ' + gamesPlayed;
+      localStorage.setItem(gamesPlayedName, gamesPlayed);
+    }
+
     function setLevel(newLevel) {
 
         level = newLevel;
         levelDomElement.innerText = "level : " + newLevel + ".  ";
 
         if (interval > intervalLimit && newLevel !== 0) {
-            interval -= 30;
-            clearInterval(intervalId);
-            intervalId = setInterval(oneStep, interval);
+            interval -= 100;
+            clearInterval(enemyMovingFuncIntervalId);
+            enemyMovingFuncIntervalId = setInterval(function(){
+              enemy.step();
+            }, interval);
+
+            if(shootingInterval > shootingIntervalLimit){
+              shootingInterval -= 10;
+            }
+
+            if(shootingIntervalId != null){
+              clearInterval(shootingInterval);
+              player.shoot();
+              shootingIntervalId = setInterval(function() {
+                player.shoot();
+              }, shootingInterval);
+            }
         } else
         if (interval <= intervalLimit && interval + 20 > intervalLimit) {
             interval -= 2;
-            clearInterval(intervalId);
-            intervalId = setInterval(oneStep, interval);
+            clearInterval(enemyMovingFuncIntervalId);
+            enemyMovingFuncIntervalId = setInterval(function(){
+              enemy.step();
+            }, interval);
         }
     }
 
     function restart() {
 
+        updateGamesPlayed();
+
+        clearInterval(playerMovingFuncIntervalId);
+        clearInterval(enemyMovingFuncIntervalId);
+        clearInterval(shootingIntervalId);
+
         setScore(0);
         setLevel(0);
 
-        interval = 200;
+        interval = 800;
+        shootingInterval = 200;
+
+        enemy.reset();
+        player.reset();
+
+        enemyMovingFuncIntervalId = setInterval(function(){
+          enemy.step();
+        }, interval);
 
         render();
     }
 
-    function initPlayer() {
-      player.resetLocation();
-    }
-
-    function initEnemy(){
-      arr = get2dArray(screenHeightSegments, screenWidthSegments);
-
-      for (let y = 0; y < screenHeightSegments - 16; y++) {
-        arr[y] = generateRandomLine();
-      }
-
-    }
-
-    function drawEnemy() {
-      for (let y = 0; y < screenHeightSegments; y++) {
-        for (let x = 0; x < screenWidthSegments; x++) {
-          if(arr[y][x] === 1)
-            drawSquare(x, y);
-        }
-      }
-    }
-
-    function drawPlayer(){
-      player.draw();
-    }
-
+    //TODO remove
     function isEmptyLine(lineArr){
       return lineArr.filter(function(i){return i === 1;}).length === 0;
-    }
-
-    function step() {
-      for (let y = screenHeightSegments-2; y > 0; y--) {
-        arr[y] = arr[y - 1];
-      }
-
-      arr[0] = generateRandomLine();
     }
 
     function initEvents() {
       window.addEventListener('resize', resize);
       window.addEventListener('keydown', keyDown);
+      window.addEventListener('keyup', keyUp);
       window.addEventListener('touchstart', function(e) {
           localStorage.setItem('x', e.targetTouches[0].clientX);
       });
@@ -286,15 +391,20 @@ var RetroBrickGameI = (function() {
         levelDomElement.innerText = 0;
         scoreDomElement.innerText = 0;
 
-        initEnemy();
-        initPlayer();
+        toast("shooting : space, moving : arrows");
 
         restart();
         resize();
+    }
 
-        setInterval(function(){
-          step();
-        },800);
+    function toast(msg){
+      var span = document.createElement('span');
+      span.className = 'toast';
+      span.innerText = msg;
+      setTimeout(function() {
+        span.parentNode.removeChild(span);
+      }, 4000);
+      document.body.appendChild(span);
     }
 
     function clear() {
@@ -304,8 +414,8 @@ var RetroBrickGameI = (function() {
     function render() {
         clear();
 
-        drawEnemy();
-        drawPlayer();
+        enemy.draw();
+        player.draw();
 
         requestAnimationFrame(render);
     }
@@ -334,6 +444,11 @@ var RetroBrickGameI = (function() {
             maxScoreDomElement.id = maxScoreName;
 
             infoDomElement.appendChild(maxScoreDomElement);
+
+            gamesPlayedElement = document.createElement('span');
+            gamesPlayedElement.id = gamesPlayedName;
+
+            infoDomElement.appendChild(gamesPlayedElement);
         }
     };
 }());
