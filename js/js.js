@@ -31,8 +31,18 @@ function get2dArray(x, y, value){
 
 var RetroBrickGameI = (function() {
 
-    var maxScoreName = 'RetroBrickGameI_MaxScore';
-    var gamesPlayedName = 'RetroBrickGameI_GamesPlayed'
+    var config = {
+      maxScoreName : 'RetroBrickGameI_MaxScore',
+      gamesPlayedName : 'RetroBrickGameI_GamesPlayed',
+      enemyMovingInterval : 800,
+      enemyMovingIntervalLimit : 200,
+      shootingInterval : 200,
+      shootingIntervalLimit : 60,
+      screenHeightSegments : 20,
+      screenWidthSegments : 10
+    };
+
+    var defaultConfig = Object.assign({}, config);
 
     var domElement = null;
     var infoDomElement = null;
@@ -44,12 +54,6 @@ var RetroBrickGameI = (function() {
     var screenWidth = null;
     var screenHeight = null;
     var squareWidth = null;
-    var screenHeightSegments = 20;
-    var screenWidthSegments = 10;
-    var interval = 600;
-    var intervalLimit = 200;
-    var shootingInterval = 260;
-    var shootingIntervalLimit = 60;
     var enemyMovingFuncIntervalId = null;
     var score = 0;
     var level = 0;
@@ -60,33 +64,33 @@ var RetroBrickGameI = (function() {
     var direction = {left : 0, right : 1};
 
     var enemy = {
-      arr: null,
+      squares: null,
       generateRandomLine : function () {
-        var newLine = new Array(screenWidthSegments);
+        var newLine = new Array(config.screenWidthSegments);
 
-        for (let i = 0; i < screenWidthSegments; i++) {
+        for (let i = 0; i < config.screenWidthSegments; i++) {
           newLine[i] = Math.floor(Math.random() * 100) % 2 ? 0 : 1;
         }
 
         return newLine;
       },
       reset : function () {
-        this.arr = get2dArray(screenHeightSegments, screenWidthSegments);
+        this.squares = get2dArray(config.screenHeightSegments, config.screenWidthSegments);
 
-        for (let y = 0; y < screenHeightSegments - 16; y++) {
-          this.arr[y] = this.generateRandomLine();
+        for (let y = 0; y < config.screenHeightSegments - 16; y++) {
+          this.squares[y] = this.generateRandomLine();
         }
 
       },
       draw : function () {
-        for (let y = 0; y < screenHeightSegments; y++) {
-          for (let x = 0; x < screenWidthSegments; x++) {
-            if(this.arr[y][x] === 1)
+        for (let y = 0; y < config.screenHeightSegments; y++) {
+          for (let x = 0; x < config.screenWidthSegments; x++) {
+            if(this.squares[y][x] === 1)
               drawSquare(x, y);
           }
         }
 
-        // this.arr.forEach(function(i){
+        // this.squares.forEach(function(i){
         //   i.forEach(function(value) {
         //     if(value === 1)
         //       drawSquare(x, y);
@@ -95,7 +99,7 @@ var RetroBrickGameI = (function() {
       },
       step : function () {
 
-        var gameOver = this.arr[screenHeightSegments - 4].filter(function(i){
+        var gameOver = this.squares[config.screenHeightSegments - 4].filter(function(i){
           return i === 1;
         }).length;
 
@@ -104,11 +108,13 @@ var RetroBrickGameI = (function() {
           restart();
         }
 
-        for (let y = screenHeightSegments-3; y > 0; y--) {
-          this.arr[y] = this.arr[y - 1];
+        for (let y = config.screenHeightSegments-3; y > 0; y--) {
+          this.squares[y] = this.squares[y - 1];
         }
 
-        this.arr[0] = this.generateRandomLine();
+        this.squares[0] = this.generateRandomLine();
+
+        render();
       }
     };
 
@@ -122,7 +128,8 @@ var RetroBrickGameI = (function() {
       move : function(direction) {
         if(this.canMove(direction)){
             this.squares.forEach(function(i){i.x = [i.x - 1, i.x + 1][direction];});
-          }
+        }
+        render();
       },
       canMove: function(direction){
         return  this.squares.filter(function(i){
@@ -131,25 +138,37 @@ var RetroBrickGameI = (function() {
                 }).length == 0;
       },
       reset : function(){
-        this.squares = [{x:4, y:screenHeightSegments - 1},
-                        {x:5, y:screenHeightSegments - 1},
-                        {x:6, y:screenHeightSegments - 1},
-                        {x:5, y:screenHeightSegments - 2}
+        this.squares = [{x:4, y:config.screenHeightSegments - 1},
+                        {x:5, y:config.screenHeightSegments - 1},
+                        {x:6, y:config.screenHeightSegments - 1},
+                        {x:5, y:config.screenHeightSegments - 2}
                        ];
       },
       shoot : function(){
         var x = this.squares[1].x;
 
-        for (let y = screenHeightSegments - 3; y > 0 ; y--) {
-          if(enemy.arr[y][x] == 1){
+        for (let y = config.screenHeightSegments - 3; y > 0 ; y--) {
+          if(enemy.squares[y][x] == 1){
             setScore(score + 1);
-            enemy.arr[y][x] = 0;
+            enemy.squares[y][x] = 0;
             break;
           }
         }
+
+        render();
+      },
+      startShooting : function() {
+        this.shoot();
+
+        shootingIntervalId = setInterval(function() {
+          player.shoot();
+        }, config.shootingInterval);
+      },
+      stopShooting : function() {
+        clearInterval(shootingIntervalId);
+        shootingIntervalId = null;
       }
     };
-
 
     function drawSquare(x, y) {
 
@@ -185,14 +204,14 @@ var RetroBrickGameI = (function() {
 
         if (bodyWidth < screenWidth) { //TODO fix width change
             screenWidth = bodyWidth;
-            screenHeight = screenWidth / screenWidthSegments * screenHeightSegments;
+            screenHeight = screenWidth / config.screenWidthSegments * config.screenHeightSegments;
         } else {
             screenHeight = parseInt(getComputedStyle(domElement).height.slice(0, -2), 10);
-            screenWidth = Math.floor(screenHeight / screenHeightSegments * screenWidthSegments);
+            screenWidth = Math.floor(screenHeight / config.screenHeightSegments * config.screenWidthSegments);
         }
 
-        squareWidth = Math.floor(screenWidth / screenWidthSegments);
-        screenWidth = screenWidthSegments * squareWidth; // pixel perfect :v
+        squareWidth = Math.floor(screenWidth / config.screenWidthSegments);
+        screenWidth = config.screenWidthSegments * squareWidth; // pixel perfect :v
 
         console.log("square width : "+squareWidth);
 
@@ -214,8 +233,7 @@ var RetroBrickGameI = (function() {
               }
           case 32 :
               {
-                  clearInterval(shootingIntervalId);
-                  shootingIntervalId = null;
+                  player.stopShooting();
                   break;
               }
       }
@@ -249,10 +267,7 @@ var RetroBrickGameI = (function() {
             case 32 :
                 {
                     if(shootingIntervalId === null){
-                      player.shoot();
-                      shootingIntervalId = setInterval(function() {
-                        player.shoot();
-                      }, shootingInterval);
+                      player.startShooting();
                     }
                     break;
                 }
@@ -269,10 +284,10 @@ var RetroBrickGameI = (function() {
     }
 
     function updateMaxScore() {
-        var old = localStorage.getItem(maxScoreName);
+        var old = localStorage.getItem(config.maxScoreName);
 
         if (old == null || old === undefined || isNaN(parseInt(old, 10))) {
-            localStorage.setItem(maxScoreName, 0);
+            localStorage.setItem(config.maxScoreName, 0);
             old = 0;
         } else {
             old = parseInt(old, 10);
@@ -280,14 +295,14 @@ var RetroBrickGameI = (function() {
 
         var maxScore = old > score ? old : score;
         maxScoreDomElement.innerText = 'max : ' + maxScore;
-        localStorage.setItem(maxScoreName, maxScore);
+        localStorage.setItem(config.maxScoreName, maxScore);
     }
 
     function updateGamesPlayed() {
-      var old = localStorage.getItem(gamesPlayedName);
+      var old = localStorage.getItem(config.gamesPlayedName);
 
       if (old == null || old === undefined || isNaN(parseInt(old, 10))) {
-          localStorage.setItem(gamesPlayedName, 0);
+          localStorage.setItem(config.gamesPlayedName, 0);
           old = 0;
       } else {
           old = parseInt(old, 10);
@@ -295,7 +310,7 @@ var RetroBrickGameI = (function() {
 
       var gamesPlayed = old + 1;
       gamesPlayedElement.innerText = 'games played : ' + gamesPlayed;
-      localStorage.setItem(gamesPlayedName, gamesPlayed);
+      localStorage.setItem(config.gamesPlayedName, gamesPlayed);
     }
 
     function setLevel(newLevel) {
@@ -303,31 +318,31 @@ var RetroBrickGameI = (function() {
         level = newLevel;
         levelDomElement.innerText = "level : " + newLevel + ".  ";
 
-        if (interval > intervalLimit && newLevel !== 0) {
-            interval -= 100;
+        if (config.enemyMovingInterval > config.enemyMovingIntervalLimit && newLevel !== 0) {
+            config.enemyMovingInterval -= 100;
             clearInterval(enemyMovingFuncIntervalId);
             enemyMovingFuncIntervalId = setInterval(function(){
               enemy.step();
-            }, interval);
+            }, config.enemyMovingInterval);
 
-            if(shootingInterval > shootingIntervalLimit){
-              shootingInterval -= 10;
+            if(config.shootingInterval > config.shootingIntervalLimit){
+              config.shootingInterval -= 10;
             }
 
             if(shootingIntervalId != null){
-              clearInterval(shootingInterval);
+              clearInterval(config.shootingInterval);
               player.shoot();
               shootingIntervalId = setInterval(function() {
                 player.shoot();
-              }, shootingInterval);
+              }, config.shootingInterval);
             }
         } else
-        if (interval <= intervalLimit && interval + 20 > intervalLimit) {
-            interval -= 2;
+        if (config.enemyMovingInterval <= config.enemyMovingIntervalLimit && config.enemyMovingInterval + 20 > config.enemyMovingIntervalLimit) {
+            config.enemyMovingInterval -= 2;
             clearInterval(enemyMovingFuncIntervalId);
             enemyMovingFuncIntervalId = setInterval(function(){
               enemy.step();
-            }, interval);
+            }, config.enemyMovingInterval);
         }
     }
 
@@ -342,15 +357,14 @@ var RetroBrickGameI = (function() {
         setScore(0);
         setLevel(0);
 
-        interval = 800;
-        shootingInterval = 200;
+        Object.assign(config, defaultConfig);
 
         enemy.reset();
         player.reset();
 
         enemyMovingFuncIntervalId = setInterval(function(){
           enemy.step();
-        }, interval);
+        }, config.enemyMovingInterval);
 
         render();
     }
@@ -417,7 +431,7 @@ var RetroBrickGameI = (function() {
         enemy.draw();
         player.draw();
 
-        requestAnimationFrame(render);
+        //requestAnimationFrame(render);
     }
 
     return {
@@ -441,12 +455,12 @@ var RetroBrickGameI = (function() {
             infoDomElement.appendChild(scoreDomElement);
 
             maxScoreDomElement = document.createElement('span');
-            maxScoreDomElement.id = maxScoreName;
+            maxScoreDomElement.id = config.maxScoreName;
 
             infoDomElement.appendChild(maxScoreDomElement);
 
             gamesPlayedElement = document.createElement('span');
-            gamesPlayedElement.id = gamesPlayedName;
+            gamesPlayedElement.id = config.gamesPlayedName;
 
             infoDomElement.appendChild(gamesPlayedElement);
         }
