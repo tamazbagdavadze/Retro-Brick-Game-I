@@ -6,9 +6,9 @@
 
 function get2dArray(x, y, value){
   var arr = new Array(x);
-  var length = arr.length;
+  var length = x;
 
-  for(let i = 0; i < arr.length; i++){
+  for(let i = 0; i < length; i++){
     arr[i] = new Array(y);
 
     if(value === undefined)
